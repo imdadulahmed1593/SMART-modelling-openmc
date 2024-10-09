@@ -1,0 +1,484 @@
+import os
+import matplotlib.pyplot as plt
+import matplotlib.colors as colors
+import numpy as np
+import openmc
+import openmc.deplete
+import math
+from matplotlib import pyplot
+
+###############################################################################
+#                      Simulation Input File Parameters
+###############################################################################
+
+# OpenMC simulation parameters
+batches = 20
+inactive = 10
+particles = 10000
+
+
+###############################################################################
+#                 Exporting to OpenMC materials.xml file
+###############################################################################
+
+# Instantiate some Materials and register the appropriate Nuclides
+fuel1 = openmc.Material(material_id=1, name='fuel1')
+fuel1.set_density('g/cc', 10.286)
+fuel1.add_nuclide('Th232',8.788,percent_type='wo' )
+fuel1.add_nuclide('U235',3.919,percent_type='wo' )
+fuel1.add_nuclide('U238',75.411,percent_type='wo' )
+fuel1.add_nuclide('O16',11.882,percent_type='wo' )
+fuel1.deplete = True
+
+
+
+moderator = openmc.Material(material_id=4, name='moderator')
+moderator.set_density('g/cc', 1.0)
+moderator.add_element('H', 2.)
+moderator.add_element('O', 1.)
+moderator.add_s_alpha_beta('c_H_in_H2O')
+
+clad1 = openmc.Material(material_id=5, name='clad1')
+clad1.set_density('g/cc', 6.56)
+clad1.add_element('Sn',1.57,percent_type='wo' )
+clad1.add_element('Fe',0.22,percent_type='wo' )
+clad1.add_element('Cr',0.10,percent_type='wo' )
+clad1.add_element('Ni',0.0035,percent_type='wo' )
+clad1.add_element('H',0.0006,percent_type='wo' )
+clad1.add_element('C',0.0014,percent_type='wo' )
+clad1.add_element('N',0.0028,percent_type='wo' )
+clad1.add_element('O',0.13,percent_type='wo' )
+clad1.add_element('Zr',92.8717,percent_type='wo' )
+
+poison=openmc.Material(material_id=6, name='poison')
+poison.set_density('g/cc',2.299)
+poison.add_nuclide('B10',0.699,percent_type='wo')
+poison.add_nuclide('B11',3.207,percent_type='wo')
+poison.add_element('O',53.902,percent_type='wo')
+poison.add_element('Al',1.167,percent_type='wo')
+poison.add_element('Si',37.856,percent_type='wo')
+poison.add_element('K',0.332,percent_type='wo')
+poison.add_element('Na',2.837,percent_type='wo')
+
+helium=openmc.Material(material_id=7, name='helium')
+helium.set_density('g/cc', 0.00225)
+helium.add_element('He',1.0)
+
+# Instantiate a Materials collection and export to XML
+materials_file = openmc.Materials([fuel1,moderator,clad1,poison,helium])
+materials_file.export_to_xml()
+
+
+###############################################################################
+#                 Exporting to OpenMC geometry.xml file
+###############################################################################
+
+# Create the surface used for each pin
+ic_rad = openmc.ZCylinder(x0=0, y0=0, r=0.19, name='ic_rad')
+icl_rad = openmc.ZCylinder(x0=0, y0=0, r=0.24625, name='icl_rad')
+ig_rad = openmc.ZCylinder(x0=0, y0=0, r=0.2554, name='ig_rad ')
+pin_rad = openmc.ZCylinder(x0=0, y0=0, r=0.4096, name='pin_rad')
+clad_in=openmc.ZCylinder(x0=0, y0=0, r=0.41875, name='clad_in')
+clad_out=openmc.ZCylinder(x0=0,y0=0,r=0.47500, name='clad_out')
+
+# Create the cells which will be used to represent each pin type.
+ic_fuel1 = openmc.Cell(region = -ic_rad,fill = moderator)
+icl_fuel1= openmc.Cell(region = +ic_rad & -icl_rad ,fill = clad1)
+ig_fuel1= openmc.Cell(region = +icl_rad & -ig_rad,fill = helium)
+
+fuel_fuel1 = openmc.Cell(name='fuel1',region = +ig_rad & -pin_rad,fill = fuel1)
+
+
+helium_fuel1 = openmc.Cell(name='helium',region = +pin_rad & -clad_in,fill = helium)
+
+
+clad_fuel1 = openmc.Cell(name='clad1',region = +clad_in & -clad_out,fill = clad1)
+
+
+mod_fuel1 = openmc.Cell(name='moderator',region = +clad_out,fill = moderator)
+
+# Finally add the cells we just made to a Universe object
+u1 = openmc.Universe()
+u1.add_cells([ic_fuel1,icl_fuel1,ig_fuel1,fuel_fuel1,helium_fuel1,clad_fuel1,mod_fuel1])
+
+# Create the cells which will be used to represent each pin type.
+
+# Create the cell for the material inside the cladding
+
+
+
+poison_clad_in=openmc.ZCylinder(x0=0, y0=0, R=0.56150, name='poison_clad_in')
+poison_clad_out=openmc.ZCylinder(x0=0,y0=0,R=0.61200, name='poison_clad_out')
+# Create the cells which will be used to represent each pin type.
+cells={}
+universes={}
+# Create the cell for the material inside the cladding
+cells[poison] = openmc.Cell(name='poison')
+# Assign the half-spaces to the cell
+cells[poison].region = -poison_clad_in
+# Register the material with this cell
+cells[poison].fill = moderator
+
+# Create the cell for the material inside the cladding
+cells[clad1] = openmc.Cell(name='clad1')
+# Assign the half-spaces to the cell
+cells[clad1].region = +poison_clad_in & -poison_clad_out
+# Register the material with this cell
+cells[clad1].fill = clad1
+
+# Create the cell for the material inside the cladding
+cells[moderator] = openmc.Cell(name='moderator')
+# Assign the half-spaces to the cell
+cells[moderator].region = +poison_clad_out
+# Register the material with this cell
+cells[moderator].fill = moderator
+
+g=openmc.Universe()
+g.add_cells([cells[poison],cells[clad1],cells[moderator]])
+
+#for creating an empty assembly
+empty_plane1=openmc.XPlane(x0=10.71)
+empty_plane2=openmc.YPlane(y0=10.71)
+empty_plane3=openmc.XPlane(x0=-10.71)
+empty_plane4=openmc.YPlane(y0=-10.71)
+cells={}
+universes={}
+cells[moderator]= openmc.Cell(name='moderator')
+cells[moderator].region=+empty_plane3 & -empty_plane1 & +empty_plane4 & -empty_plane2
+cells[moderator].fill=moderator
+m=openmc.Universe()
+m.add_cells([cells[moderator]])
+
+
+
+#A2
+cells2={}
+lattices2 = {}
+universes2={}
+# Instantiate the UO2 Lattice
+lattices2['UO2 Assembly'] = openmc.RectLattice()
+lattices2['UO2 Assembly'].dimension = [17, 17]
+lattices2['UO2 Assembly'].lower_left = [-10.71, -10.71]
+lattices2['UO2 Assembly'].pitch = [1.26, 1.26]
+lattices2['UO2 Assembly'].universes = \
+[[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, u1, u1, u1],
+[u1, u1, u1, g, u1, u1, u1, u1, u1, u1, u1, u1, u1, g, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, g, u1, u1, u1, u1, u1, u1, u1, u1, u1, g, u1, u1, u1],
+[u1, u1, u1, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1]]
+
+# Create a containing cell and universe
+cells2['UO2 Assembly'] = openmc.Cell()
+cells2['UO2 Assembly'].fill = lattices2['UO2 Assembly']
+universes2['UO2 Assembly'] = openmc.Universe(name='UO2 Assembly 2')
+universes2['UO2 Assembly'].add_cell(cells2['UO2 Assembly'])
+
+#A3
+cells3={}
+lattices3 = {}
+universes3={}
+
+# Instantiate the UO2 Lattice
+lattices3['UO2 Assembly'] = openmc.RectLattice()
+lattices3['UO2 Assembly'].dimension = [17, 17]
+lattices3['UO2 Assembly'].lower_left = [-10.71, -10.71]
+lattices3['UO2 Assembly'].pitch = [1.26, 1.26]
+lattices3['UO2 Assembly'].universes = \
+[[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, u1, u1, u1],
+[u1, u1, u1, g, u1, u1, u1, u1, u1, u1, u1, u1, u1, g, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, g, u1, u1, u1, u1, u1, u1, u1, u1, u1, g, u1, u1, u1],
+[u1, u1, u1, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1]]
+
+# Create a containing cell and universe
+cells3['UO2 Assembly'] = openmc.Cell()
+cells3['UO2 Assembly'].fill = lattices3['UO2 Assembly']
+universes3['UO2 Assembly'] = openmc.Universe(name='UO2 Assembly 3')
+universes3['UO2 Assembly'].add_cell(cells3['UO2 Assembly'])
+
+#B1
+cells4={}
+lattices4 = {}
+universes4={}
+# Instantiate the UO2 Lattice
+lattices4['UO2 Assembly'] = openmc.RectLattice()
+lattices4['UO2 Assembly'].dimension = [17, 17]
+lattices4['UO2 Assembly'].lower_left = [-10.71, -10.71]
+lattices4['UO2 Assembly'].pitch = [1.26, 1.26]
+lattices4['UO2 Assembly'].universes = \
+[[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, u1, u1, u1],
+[u1, u1, u1, g, u1, u1, u1, u1, u1, u1, u1, u1, u1, g, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, g, u1, u1, u1, u1, u1, u1, u1, u1, u1, g, u1, u1, u1],
+[u1, u1, u1, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1]]
+# Create a containing cell and universe
+cells4['UO2 Assembly'] = openmc.Cell(name='UO2 Assembly')
+cells4['UO2 Assembly'].fill = lattices4['UO2 Assembly']
+universes4['UO2 Assembly'] = openmc.Universe(name='UO2 Assembly 4')
+universes4['UO2 Assembly'].add_cell(cells4['UO2 Assembly'])
+
+#B2
+cells5={}
+lattices5 = {}
+universes5={}
+# Instantiate the UO2 Lattice
+lattices5['UO2 Assembly'] = openmc.RectLattice()
+lattices5['UO2 Assembly'].dimension = [17, 17]
+lattices5['UO2 Assembly'].lower_left = [-10.71, -10.71]
+lattices5['UO2 Assembly'].pitch = [1.26, 1.26]
+lattices5['UO2 Assembly'].universes = \
+[[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, u1, u1, u1],
+[u1, u1, u1, g, u1, u1, u1, u1, u1, u1, u1, u1, u1, g, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, g, u1, u1, u1, u1, u1, u1, u1, u1, u1, g, u1, u1, u1],
+[u1, u1, u1, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1]]
+# Create a containing cell and universe
+cells5['UO2 Assembly'] = openmc.Cell(name='UO2 Assembly')
+cells5['UO2 Assembly'].fill = lattices5['UO2 Assembly']
+universes5['UO2 Assembly'] = openmc.Universe(name='UO2 Assembly 5')
+universes5['UO2 Assembly'].add_cell(cells5['UO2 Assembly'])
+
+#B5
+cells6={}
+lattices6= {}
+universes6={}
+# Instantiate the UO2 Lattice
+lattices6['UO2 Assembly'] = openmc.RectLattice()
+lattices6['UO2 Assembly'].dimension = [17, 17]
+lattices6['UO2 Assembly'].lower_left = [-10.71, -10.71]
+lattices6['UO2 Assembly'].pitch = [1.26, 1.26]
+lattices6['UO2 Assembly'].universes = \
+[[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, u1, u1, u1],
+[u1, u1, u1, g, u1, u1, u1, u1, u1, u1, u1, u1, u1, g, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, g, u1, u1, u1, u1, u1, u1, u1, u1, u1, g, u1, u1, u1],
+[u1, u1, u1, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1]]
+# Create a containing cell and universe
+cells6['UO2 Assembly'] = openmc.Cell(name='UO2 Assembly')
+cells6['UO2 Assembly'].fill = lattices6['UO2 Assembly']
+universes6['UO2 Assembly'] = openmc.Universe(name='UO2 Assembly 6')
+universes6['UO2 Assembly'].add_cell(cells6['UO2 Assembly'])
+
+
+#B6
+cells7={}
+lattices7= {}
+universes7={}
+# Instantiate the UO2 Lattice
+lattices7['UO2 Assembly'] = openmc.RectLattice()
+lattices7['UO2 Assembly'].dimension = [17, 17]
+lattices7['UO2 Assembly'].lower_left = [-10.71, -10.71]
+lattices7['UO2 Assembly'].pitch = [1.26, 1.26]
+lattices7['UO2 Assembly'].universes = \
+[[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, u1, u1, u1],
+[u1, u1, u1, g, u1, u1, u1, u1, u1, u1, u1, u1, u1, g, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, g, u1, u1, u1, u1, u1, u1, u1, u1, u1, g, u1, u1, u1],
+[u1, u1, u1, u1, u1, g, u1, u1, g, u1, u1, g, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1],
+[u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1, u1]]
+# Create a containing cell and universe
+cells7['UO2 Assembly'] = openmc.Cell(name='UO2 Assembly')
+cells7['UO2 Assembly'].fill = lattices7['UO2 Assembly']
+universes7['UO2 Assembly'] = openmc.Universe(name='UO2 Assembly 7')
+universes7['UO2 Assembly'].add_cell(cells7['UO2 Assembly'])
+
+
+lattices= {}
+lattices['Core'] = openmc.RectLattice(name='11*11 core lattice')
+lattices['Core'].dimension= [9,9]
+lattices['Core'].lower_left = [-96.39, -96.39]
+lattices['Core'].pitch = [21.42, 21.42]
+lattices['Core'].outer= m
+A2= universes2['UO2 Assembly']
+A3 = universes3['UO2 Assembly']
+B1 = universes4['UO2 Assembly']
+B2 = universes5['UO2 Assembly']
+B5 = universes6['UO2 Assembly']
+B6 = universes7['UO2 Assembly']
+lattices['Core'].universes = [[m, m, m, B1, B2, B1, m, m, m],
+[m, m, B2, B5, B6, B5, B2, m, m],
+[m, B2, B5, A3, A2, A3, B5, B2, m],
+[B1, B5, A3, A2, A3, A2, A3, B5, B1],
+[B2, B6, A2, A3, A2, A3, A2, B6, B2],
+[B1, B5, A3, A2, A3, A2, A3, B5, B1],
+[m, B2, B5, A3, A2, A3, B5, B2, m],
+[m, m, B2, B5, B6, B5, B2, m, m],
+[m, m, m, B1, B2, B1, m, m, m]]
+
+
+# Create boundary planes to surround the geometry
+
+# Create root Cell
+core_os=openmc.ZCylinder(r=102,boundary_type='reflective')
+root_cell = openmc.Cell(name='root cell')
+root_cell.fill = lattices['Core']
+root_cell.region = -core_os
+
+# Create root Universe
+root_universe = openmc.Universe(name='root universe', universe_id=0)
+root_universe.add_cell(root_cell)
+
+geometry = openmc.Geometry(root_universe)
+geometry.export_to_xml()
+
+###############################################################################
+#                   Exporting to OpenMC settings.xml file
+###############################################################################
+
+# Instantiate a Settings object, set all runtime parameters, and export to XML
+settings_file = openmc.Settings()
+settings_file.batches = batches
+settings_file.inactive = inactive
+settings_file.particles = particles
+
+# Create an initial uniform spatial source distribution over fissionable zones
+bounds = [-1, -1, -1, 1, 1, 1]
+uniform_dist = openmc.stats.Box(bounds[:3], bounds[3:], only_fissionable=True)
+settings_file.source = openmc.source.Source(space=uniform_dist)
+
+settings_file.export_to_xml()
+
+
+###############################################################################
+#                   Exporting to OpenMC plots.xml file
+###############################################################################
+
+plot_xy = openmc.Plot(plot_id=1)
+plot_xy.filename = 'plot_xy'
+plot_xy.origin = [0, 0, 0]
+plot_xy.width = [204, 204]
+plot_xy.pixels = [10000, 10000]
+plot_xy.color_by = 'material'
+
+plot_yz = openmc.Plot(plot_id=2)
+plot_yz.filename = 'plot_yz'
+plot_yz.basis = 'yz'
+plot_yz.origin = [0, 0, 0]
+plot_yz.width = [250, 200]
+plot_yz.pixels = [500, 500]
+plot_yz.color_by = 'material'
+
+# Instantiate a Plots collection, add plots, and export to XML
+plot_file = openmc.Plots((plot_xy, plot_yz))
+plot_file.export_to_xml()
+
+###############################################################################
+#                   Exporting to OpenMC tallies.xml file
+###############################################################################
+# Instantiate a tally mesh
+mesh = openmc.RegularMesh()
+mesh.dimension = [100, 100, 1]
+mesh.lower_left = [-300, -300, -1.e50]
+mesh.upper_right = [300, 300, 1.e50]
+
+# Instantiate some tally Filters
+energy_filter = openmc.EnergyFilter([0., 4., 20.e6])
+mesh_filter = openmc.MeshFilter(mesh)
+
+# Instantiate the Tally
+tally = openmc.Tally(tally_id=1, name='tally 1')
+tally.filters = [energy_filter, mesh_filter]
+tally.scores = ['flux', 'fission', 'nu-fission']
+
+# Instantiate a Tallies collection and export to XML
+tallies_file = openmc.Tallies([tally])
+tallies_file.export_to_xml()
+
+##################################################################################
+#                   Depletion Calculation
+##################################################################################
+
+#volume specification
+fuel1.volume = math.pi * 57 * 264 * 0.4096 ** 2
+#depletion chain specification
+#chain = openmc.deplete.Chain.from_xml("./chain_endfb71.xml")
+operator = openmc.deplete.Operator(geometry, settings_file,"./chain_casl.xml")
+power = 174 # W/cm
+time_steps = [30 * 24 * 60 * 60] * 2
+
+
+integrator = openmc.deplete.PredictorIntegrator(operator, time_steps, power)
+integrator.integrate() 
+
+##################################################################################
+#                   Plotting in real time
+##################################################################################
+
+results = openmc.deplete.ResultsList.from_hdf5("./depletion_results.h5")
+time, k = results.get_eigenvalue()
+time /= (24 * 60 * 60)
+# convert back to days from seconds
+pyplot.errorbar(time, k[:, 0], yerr=k[:, 1])
+pyplot.xlabel("Time [d]")
+pyplot.ylabel("$k_{eff}\pm \sigma$");

@@ -1,0 +1,9 @@
+This are depletion cores.
+1. ref smart core depletion (6 types of assemblies with varying B/A rods -- 2 type of fuel)
+2. annular smart core depletion (6 types of assemblies with varying B/A rods -- 2 type of fuel)
+3. homo thorium ( 1 type of assembly with varying amounts of Th% in the fuel )
+4. hetero thorium ( 1 type of assembly -- 2 type of fuel[outside UO2, inside Th+UO2] ) ( with varying amounts of Th% in the fuel )
+5. Annular homo thorium ( 1 type of assembly with varying amounts of Th% in the fuel )
+6. Annular hetero thorium ( 1 type of assembly -- 2 type of fuel[outside UO2, inside Th+UO2] ) ( with varying amounts of Th% in the fuel )
+
+for visual representation , see the Th-30 version of each type of core. (Those are verified)

@@ -1,0 +1,71 @@
+<?xml version='1.0' encoding='utf-8'?>
+<materials>
+  <material depletable="true" id="1" name="fuel1" volume="1001858.0495607599">
+    <density units="g/cc" value="10.286" />
+    <nuclide name="O16" wo="11.853" />
+    <nuclide name="U235" wo="4.88" />
+    <nuclide name="U238" wo="83.267" />
+  </material>
+  <material depletable="true" id="2" name="fuel2" volume="584417.19557711">
+    <density units="g/cc" value="10.286" />
+    <nuclide name="O16" wo="11.853" />
+    <nuclide name="U235" wo="2.82" />
+    <nuclide name="U238" wo="85.325" />
+  </material>
+  <material id="4" name="moderator">
+    <density units="g/cc" value="1.0" />
+    <nuclide name="B10" wo="0.056902037212727095" />
+    <nuclide name="B11" wo="0.25309796278727287" />
+    <nuclide name="O16" wo="88.3001053841789" />
+    <nuclide name="H1" wo="11.151528649319685" />
+    <nuclide name="H2" wo="0.003471350680314113" />
+    <nuclide name="O17" wo="0.03565166666817113" />
+    <nuclide name="O18" wo="0.1992429491529133" />
+    <sab name="c_H_in_H2O" />
+  </material>
+  <material id="5" name="clad1">
+    <density units="g/cc" value="6.56" />
+    <nuclide name="O16" wo="0.12965509346522008" />
+    <nuclide name="Zr91" wo="10.3838802546663" />
+    <nuclide name="Zr96" wo="2.7339471040175747" />
+    <nuclide name="C12" wo="0.0013832095831201269" />
+    <nuclide name="C13" wo="1.6790416879873012e-05" />
+    <nuclide name="Cr50" wo="0.004173686536432398" />
+    <nuclide name="Cr52" wo="0.08369936235260468" />
+    <nuclide name="Cr53" wo="0.009673586887095359" />
+    <nuclide name="Cr54" wo="0.002453364223867577" />
+    <nuclide name="Fe54" wo="0.012420228098080155" />
+    <nuclide name="Fe56" wo="0.20218336329791678" />
+    <nuclide name="Fe57" wo="0.004752810958243928" />
+    <nuclide name="Fe58" wo="0.0006435976457591505" />
+    <nuclide name="H1" wo="0.0005998132845891359" />
+    <nuclide name="H2" wo="1.867154108640491e-07" />
+    <nuclide name="N14" wo="0.0027890161972657034" />
+    <nuclide name="N15" wo="1.098380273429677e-05" />
+    <nuclide name="Ni58" wo="0.0023519196855059355" />
+    <nuclide name="Ni60" wo="0.0009371587014060292" />
+    <nuclide name="Ni61" wo="4.141756798030298e-05" />
+    <nuclide name="Ni62" wo="0.0001342187805837742" />
+    <nuclide name="Ni64" wo="3.5285264523957946e-05" />
+    <nuclide name="O17" wo="5.234897686634943e-05" />
+    <nuclide name="O18" wo="0.00029255755791357914" />
+    <nuclide name="Sn112" wo="0.014355967990426394" />
+    <nuclide name="Sn114" wo="0.009942376271825482" />
+    <nuclide name="Sn115" wo="0.005166822270196739" />
+    <nuclide name="Sn116" wo="0.2228775413210529" />
+    <nuclide name="Sn117" wo="0.1187404363708478" />
+    <nuclide name="Sn118" wo="0.377664181256756" />
+    <nuclide name="Sn119" wo="0.13508248704249357" />
+    <nuclide name="Sn120" wo="0.516642552825953" />
+    <nuclide name="Sn122" wo="0.07464640582322457" />
+    <nuclide name="Sn124" wo="0.09488122882722348" />
+    <nuclide name="Zr90" wo="47.091633335617544" />
+    <nuclide name="Zr92" wo="16.046466554287438" />
+    <nuclide name="Zr94" wo="16.615772751411168" />
+  </material>
+  <material id="7" name="helium">
+    <density units="g/cc" value="0.00225" />
+    <nuclide ao="2e-06" name="He3" />
+    <nuclide ao="0.999998" name="He4" />
+  </material>
+</materials>
